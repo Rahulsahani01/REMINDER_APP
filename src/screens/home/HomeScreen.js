@@ -15,7 +15,8 @@ import {
   Gesture,
   GestureDetector,
 } from "react-native-gesture-handler";
-import Animated, {
+import Animated,
+{
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -25,9 +26,11 @@ import Animated, {
 
 const { width } = Dimensions.get("window");
 const numColumns = 2;
-const cardMargin = 8;
-const cardWidth = (width - 40 - cardMargin * (numColumns + 1)) / numColumns;
-const cardHeight = 130;
+const cardMargin = 10;
+const containerPadding = 20;
+const cardGap = 12; // Gap between cards
+const cardWidth = (width - containerPadding * 2 - cardGap) / numColumns;
+const cardHeight = 140;
 const SWIPE_THRESHOLD = cardWidth * 0.3;
 
 // Light colors for cards
@@ -140,18 +143,20 @@ export default function HomeScreen() {
 
   const addTask = () => {
     if (newTitle.trim()) {
+      const details = formatDetails();
       setTasks([
         ...tasks,
         {
           id: Date.now().toString(),
           title: newTitle.trim(),
-          details: formatDetails(),
+          details: details,
           completed: false,
           color: getRandomLightColor(),
         },
       ]);
       setNewTitle("");
       setNewDetails("");
+      setDetailType("paragraph");
       setListItems([""]);
       setModalVisible(false);
     }
@@ -176,7 +181,6 @@ export default function HomeScreen() {
 
   const deleteTaskFromEdit = () => {
     if (editingTask) {
-      // Move to archive instead of permanent delete
       const taskToArchive = tasks.find((task) => task.id === editingTask.id);
       if (taskToArchive) {
         setArchivedTasks([
@@ -197,7 +201,6 @@ export default function HomeScreen() {
     );
   };
 
-  // Archive task instead of permanent delete (swipe delete)
   const archiveTask = (id) => {
     const taskToArchive = tasks.find((task) => task.id === id);
     if (taskToArchive) {
@@ -209,18 +212,15 @@ export default function HomeScreen() {
     setTasks(tasks.filter((item) => item.id !== id));
   };
 
-  // Permanently delete from archive
   const permanentlyDeleteTask = (id) => {
     setArchivedTasks(archivedTasks.filter((task) => task.id !== id));
     closeViewArchivedTask();
   };
 
-  // Clear all archived tasks
   const clearAllArchived = () => {
     setArchivedTasks([]);
   };
 
-  // Restore task from archive
   const restoreTask = (id) => {
     const taskToRestore = archivedTasks.find((task) => task.id === id);
     if (taskToRestore) {
@@ -231,7 +231,6 @@ export default function HomeScreen() {
     closeViewArchivedTask();
   };
 
-  // Render details based on type
   const renderCardDetails = (details, completed) => {
     if (!details || !details.content || details.content.length === 0) return null;
 
@@ -246,15 +245,15 @@ export default function HomeScreen() {
     }
 
     const items = details.content.slice(0, 2);
-    const prefix = details.type === "bullets" ? "• " : 
-                   details.type === "numbered" ? (i) => `${i + 1}. ` : 
-                   details.type === "checklist" ? "☐ " : "";
 
     return (
       <View style={styles.listPreview}>
         {items.map((item, i) => (
           <Text key={i} style={textStyle} numberOfLines={1}>
-            {typeof prefix === "function" ? prefix(i) : prefix}{item}
+            {details.type === "bullets" && "• "}
+            {details.type === "numbered" && `${i + 1}. `}
+            {details.type === "checklist" && "☐ "}
+            {item}
           </Text>
         ))}
         {details.content.length > 2 && (
@@ -264,7 +263,6 @@ export default function HomeScreen() {
     );
   };
 
-  // Render full details for archived task view
   const renderFullDetails = (details) => {
     if (!details || !details.content || details.content.length === 0) {
       return <Text style={styles.noDetailsText}>No details</Text>;
@@ -274,15 +272,14 @@ export default function HomeScreen() {
       return <Text style={styles.archivedDetailText}>{details.content}</Text>;
     }
 
-    const prefix = details.type === "bullets" ? "• " : 
-                   details.type === "numbered" ? (i) => `${i + 1}. ` : 
-                   details.type === "checklist" ? "☐ " : "";
-
     return (
       <View style={styles.archivedListContainer}>
         {details.content.map((item, i) => (
           <Text key={i} style={styles.archivedDetailText}>
-            {typeof prefix === "function" ? prefix(i) : prefix}{item}
+            {details.type === "bullets" && "• "}
+            {details.type === "numbered" && `${i + 1}. `}
+            {details.type === "checklist" && "☐ "}
+            {item}
           </Text>
         ))}
       </View>
@@ -350,7 +347,6 @@ export default function HomeScreen() {
           ]}
         >
           <View style={styles.cardContent}>
-            {/* Header with title and type indicator */}
             <View style={styles.cardHeader}>
               <Text
                 style={[styles.titleText, item.completed && styles.completedTitle]}
@@ -365,12 +361,10 @@ export default function HomeScreen() {
               )}
             </View>
 
-            {/* Details section */}
             <View style={styles.cardBody}>
               {renderCardDetails(item.details, item.completed)}
             </View>
 
-            {/* Footer with status and hint */}
             <View style={styles.cardFooter}>
               {item.completed && (
                 <Text style={styles.statusBadge}>✓ Done</Text>
@@ -408,31 +402,37 @@ export default function HomeScreen() {
 
     return (
       <View style={styles.listInputContainer}>
-        <ScrollView style={styles.listScroll} nestedScrollEnabled={true}>
-          {listItems.map((item, index) => (
-            <View key={index} style={styles.listItemRow}>
-              <Text style={styles.listPrefix}>
-                {detailType === "bullets" && "•"}
-                {detailType === "numbered" && `${index + 1}.`}
-                {detailType === "checklist" && "☐"}
-              </Text>
-              <TextInput
-                style={styles.listItemInput}
-                placeholder={`Item ${index + 1}...`}
-                value={item}
-                onChangeText={(value) => updateListItem(index, value)}
-              />
-              {listItems.length > 1 && (
-                <TouchableOpacity
-                  onPress={() => removeListItem(index)}
-                  style={styles.removeItemBtn}
-                >
-                  <Text style={styles.removeItemText}>✕</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
-        </ScrollView>
+        <View style={styles.listScrollWrapper}>
+          <ScrollView 
+            style={styles.listScroll} 
+            nestedScrollEnabled={true}
+            showsVerticalScrollIndicator={true}
+          >
+            {listItems.map((item, index) => (
+              <View key={`${detailType}-${index}`} style={styles.listItemRow}>
+                <Text style={styles.listPrefix}>
+                  {detailType === "bullets" && "•"}
+                  {detailType === "numbered" && `${index + 1}.`}
+                  {detailType === "checklist" && "☐"}
+                </Text>
+                <TextInput
+                  style={styles.listItemInput}
+                  placeholder={`Item ${index + 1}...`}
+                  value={item}
+                  onChangeText={(value) => updateListItem(index, value)}
+                />
+                {listItems.length > 1 && (
+                  <TouchableOpacity
+                    onPress={() => removeListItem(index)}
+                    style={styles.removeItemBtn}
+                  >
+                    <Text style={styles.removeItemText}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
         <TouchableOpacity style={styles.addItemBtn} onPress={addListItem}>
           <Text style={styles.addItemText}>+ Add Item</Text>
         </TouchableOpacity>
@@ -449,56 +449,61 @@ export default function HomeScreen() {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>
-            {isEdit ? "Edit Task" : "Add New Task"}
-          </Text>
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={styles.modalTitle}>
+              {isEdit ? "Edit Task" : "Add New Task"}
+            </Text>
 
-          <Text style={styles.inputLabel}>Title *</Text>
-          <TextInput
-            style={styles.modalInput}
-            placeholder="Enter task title..."
-            value={newTitle}
-            onChangeText={setNewTitle}
-            autoFocus={!isEdit}
-          />
+            <Text style={styles.inputLabel}>Title *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Enter task title..."
+              value={newTitle}
+              onChangeText={setNewTitle}
+              autoFocus={!isEdit}
+            />
 
-          <Text style={styles.inputLabel}>Details Type</Text>
-          <View style={styles.typeSelector}>
-            {DETAIL_TYPES.map((type) => (
-              <TouchableOpacity
-                key={type.id}
-                style={[
-                  styles.typeButton,
-                  detailType === type.id && styles.typeButtonActive,
-                ]}
-                onPress={() => {
-                  if (detailType !== type.id) {
-                    setDetailType(type.id);
-                    if (type.id === "paragraph") {
-                      setListItems([""]);
-                    } else {
-                      setNewDetails("");
-                      if (listItems.length === 0 || (listItems.length === 1 && listItems[0] === "")) {
+            <Text style={styles.inputLabel}>Details Type</Text>
+            <View style={styles.typeSelector}>
+              {DETAIL_TYPES.map((type) => (
+                <TouchableOpacity
+                  key={type.id}
+                  style={[
+                    styles.typeButton,
+                    detailType === type.id && styles.typeButtonActive,
+                  ]}
+                  onPress={() => {
+                    if (detailType !== type.id) {
+                      const prevType = detailType;
+                      setDetailType(type.id);
+                      
+                      if (type.id === "paragraph") {
+                        setNewDetails("");
+                      } else if (prevType === "paragraph") {
                         setListItems([""]);
                       }
                     }
-                  }
-                }}
-              >
-                <Text
-                  style={[
-                    styles.typeButtonText,
-                    detailType === type.id && styles.typeButtonTextActive,
-                  ]}
+                  }}
                 >
-                  {type.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      detailType === type.id && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    {type.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-          <Text style={styles.inputLabel}>Details</Text>
-          {renderDetailInput()}
+            <Text style={styles.inputLabel}>Details</Text>
+            {renderDetailInput()}
+          </ScrollView>
 
           <View style={styles.modalButtons}>
             {isEdit && (
@@ -653,7 +658,6 @@ export default function HomeScreen() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      {/* Header with title and archive button */}
       <View style={styles.headerContainer}>
         <Text style={styles.title}>My TODO List</Text>
         <TouchableOpacity style={styles.archiveBtn} onPress={openArchiveModal}>
@@ -675,7 +679,7 @@ export default function HomeScreen() {
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         numColumns={numColumns}
-        columnWrapperStyle={tasks.length > 1 ? styles.row : null}
+        columnWrapperStyle={styles.row}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
@@ -683,16 +687,9 @@ export default function HomeScreen() {
         }
       />
 
-      {/* Add Task Modal */}
       {renderModal(false)}
-
-      {/* Edit Task Modal */}
       {renderModal(true)}
-
-      {/* Archive Modal */}
       {renderArchiveModal()}
-
-      {/* View Archived Task Modal */}
       {renderViewArchivedTaskModal()}
     </GestureHandlerRootView>
   );
@@ -703,7 +700,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f5f5f5",
     paddingTop: 60,
-    paddingHorizontal: 20,
+    paddingHorizontal: containerPadding,
   },
   headerContainer: {
     flexDirection: "row",
@@ -768,7 +765,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   row: {
-    justifyContent: "space-between",
+    gap: cardGap,
     marginBottom: cardMargin,
   },
   card: {
@@ -780,7 +777,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    marginBottom: cardMargin,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.05)",
   },
@@ -799,7 +795,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   titleText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
     color: "#222",
     flex: 1,
@@ -816,18 +812,18 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     flex: 1,
-    marginTop: 6,
+    marginTop: 8,
   },
   detailsText: {
-    fontSize: 10,
+    fontSize: 11,
     color: "#555",
-    lineHeight: 14,
+    lineHeight: 16,
   },
   listPreview: {
     marginTop: 2,
   },
   moreText: {
-    fontSize: 9,
+    fontSize: 10,
     color: "#888",
     fontStyle: "italic",
     marginTop: 2,
@@ -862,7 +858,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 50,
   },
-  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -875,7 +870,7 @@ const styles = StyleSheet.create({
     padding: 20,
     width: width - 40,
     maxWidth: 400,
-    maxHeight: "80%",
+    maxHeight: "85%",
   },
   modalTitle: {
     fontSize: 22,
@@ -904,7 +899,6 @@ const styles = StyleSheet.create({
     height: 80,
     textAlignVertical: "top",
   },
-  // Type selector styles
   typeSelector: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -931,17 +925,20 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
   },
-  // List input styles
   listInputContainer: {
     marginBottom: 15,
   },
-  listScroll: {
+  listScrollWrapper: {
     maxHeight: 150,
-    backgroundColor: "#f5f5f5",
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#ddd",
+    backgroundColor: "#f5f5f5",
+    overflow: "hidden",
+  },
+  listScroll: {
     padding: 10,
+    maxHeight: 150,
   },
   listItemRow: {
     flexDirection: "row",
@@ -992,6 +989,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
   },
   modalButton: {
     flex: 1,
@@ -1031,7 +1031,6 @@ const styles = StyleSheet.create({
   disabledButton: {
     backgroundColor: "#ccc",
   },
-  // Archive Modal styles
   archiveModalContent: {
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -1118,7 +1117,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
-  // View Archived Task Modal
   viewArchivedContent: {
     borderRadius: 20,
     padding: 20,
