@@ -659,7 +659,7 @@ export default function HomeScreen() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <View style={styles.headerContainer}>
-        <Text style={styles.title}>My TODO List</Text>
+        <Text style={styles.title}>My Manager</Text>
         <TouchableOpacity style={styles.archiveBtn} onPress={openArchiveModal}>
           <Text style={styles.archiveBtnText}>📦</Text>
           {archivedTasks.length > 0 && (
