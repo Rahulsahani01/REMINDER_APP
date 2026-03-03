@@ -50,8 +50,12 @@ const DETAIL_TYPES = [
 
 export default function HomeScreen() {
   const [tasks, setTasks] = useState([]);
+  const [archivedTasks, setArchivedTasks] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [archiveModalVisible, setArchiveModalVisible] = useState(false);
+  const [viewArchivedTaskModal, setViewArchivedTaskModal] = useState(false);
+  const [selectedArchivedTask, setSelectedArchivedTask] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [newTitle, setNewTitle] = useState("");
   const [newDetails, setNewDetails] = useState("");
@@ -89,6 +93,24 @@ export default function HomeScreen() {
     setNewDetails("");
     setDetailType("paragraph");
     setListItems([""]);
+  };
+
+  const openArchiveModal = () => {
+    setArchiveModalVisible(true);
+  };
+
+  const closeArchiveModal = () => {
+    setArchiveModalVisible(false);
+  };
+
+  const openViewArchivedTask = (task) => {
+    setSelectedArchivedTask(task);
+    setViewArchivedTaskModal(true);
+  };
+
+  const closeViewArchivedTask = () => {
+    setViewArchivedTaskModal(false);
+    setSelectedArchivedTask(null);
   };
 
   const addListItem = () => {
@@ -154,6 +176,14 @@ export default function HomeScreen() {
 
   const deleteTaskFromEdit = () => {
     if (editingTask) {
+      // Move to archive instead of permanent delete
+      const taskToArchive = tasks.find((task) => task.id === editingTask.id);
+      if (taskToArchive) {
+        setArchivedTasks([
+          ...archivedTasks,
+          { ...taskToArchive, archivedAt: new Date().toISOString() },
+        ]);
+      }
       setTasks(tasks.filter((task) => task.id !== editingTask.id));
       closeEditModal();
     }
@@ -167,8 +197,38 @@ export default function HomeScreen() {
     );
   };
 
-  const deleteTask = (id) => {
+  // Archive task instead of permanent delete (swipe delete)
+  const archiveTask = (id) => {
+    const taskToArchive = tasks.find((task) => task.id === id);
+    if (taskToArchive) {
+      setArchivedTasks([
+        ...archivedTasks,
+        { ...taskToArchive, archivedAt: new Date().toISOString() },
+      ]);
+    }
     setTasks(tasks.filter((item) => item.id !== id));
+  };
+
+  // Permanently delete from archive
+  const permanentlyDeleteTask = (id) => {
+    setArchivedTasks(archivedTasks.filter((task) => task.id !== id));
+    closeViewArchivedTask();
+  };
+
+  // Clear all archived tasks
+  const clearAllArchived = () => {
+    setArchivedTasks([]);
+  };
+
+  // Restore task from archive
+  const restoreTask = (id) => {
+    const taskToRestore = archivedTasks.find((task) => task.id === id);
+    if (taskToRestore) {
+      const { archivedAt, ...restoredTask } = taskToRestore;
+      setTasks([...tasks, restoredTask]);
+      setArchivedTasks(archivedTasks.filter((task) => task.id !== id));
+    }
+    closeViewArchivedTask();
   };
 
   // Render details based on type
@@ -200,6 +260,31 @@ export default function HomeScreen() {
         {details.content.length > 2 && (
           <Text style={styles.moreText}>+{details.content.length - 2} more</Text>
         )}
+      </View>
+    );
+  };
+
+  // Render full details for archived task view
+  const renderFullDetails = (details) => {
+    if (!details || !details.content || details.content.length === 0) {
+      return <Text style={styles.noDetailsText}>No details</Text>;
+    }
+
+    if (details.type === "paragraph") {
+      return <Text style={styles.archivedDetailText}>{details.content}</Text>;
+    }
+
+    const prefix = details.type === "bullets" ? "• " : 
+                   details.type === "numbered" ? (i) => `${i + 1}. ` : 
+                   details.type === "checklist" ? "☐ " : "";
+
+    return (
+      <View style={styles.archivedListContainer}>
+        {details.content.map((item, i) => (
+          <Text key={i} style={styles.archivedDetailText}>
+            {typeof prefix === "function" ? prefix(i) : prefix}{item}
+          </Text>
+        ))}
       </View>
     );
   };
@@ -301,7 +386,7 @@ export default function HomeScreen() {
   const renderItem = ({ item }) => (
     <TaskCard 
       item={item} 
-      onDelete={deleteTask} 
+      onDelete={archiveTask} 
       onToggle={toggleTask} 
       onEdit={openEditModal}
     />
@@ -450,9 +535,136 @@ export default function HomeScreen() {
     </Modal>
   );
 
+  const renderArchiveModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={archiveModalVisible}
+      onRequestClose={closeArchiveModal}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.archiveModalContent}>
+          <View style={styles.archiveHeader}>
+            <Text style={styles.modalTitle}>📦 Archive</Text>
+            <TouchableOpacity onPress={closeArchiveModal} style={styles.closeBtn}>
+              <Text style={styles.closeBtnText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {archivedTasks.length === 0 ? (
+            <View style={styles.emptyArchive}>
+              <Text style={styles.emptyArchiveIcon}>📭</Text>
+              <Text style={styles.emptyArchiveText}>No archived tasks</Text>
+              <Text style={styles.emptyArchiveSubtext}>
+                Swipe tasks to archive them
+              </Text>
+            </View>
+          ) : (
+            <>
+              <ScrollView style={styles.archivedList}>
+                {archivedTasks.map((task) => (
+                  <TouchableOpacity
+                    key={task.id}
+                    style={[styles.archivedCard, { backgroundColor: task.color }]}
+                    onPress={() => openViewArchivedTask(task)}
+                  >
+                    <View style={styles.archivedCardContent}>
+                      <Text style={styles.archivedTitle} numberOfLines={1}>
+                        {task.title}
+                      </Text>
+                      <Text style={styles.archivedDate}>
+                        {new Date(task.archivedAt).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    <Text style={styles.archivedArrow}>›</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={styles.clearAllBtn}
+                onPress={clearAllArchived}
+              >
+                <Text style={styles.clearAllText}>🗑️ Clear All</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderViewArchivedTaskModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={viewArchivedTaskModal}
+      onRequestClose={closeViewArchivedTask}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.viewArchivedContent, { backgroundColor: selectedArchivedTask?.color || "#fff" }]}>
+          <View style={styles.viewArchivedHeader}>
+            <TouchableOpacity onPress={closeViewArchivedTask} style={styles.backBtn}>
+              <Text style={styles.backBtnText}>‹ Back</Text>
+            </TouchableOpacity>
+          </View>
+
+          {selectedArchivedTask && (
+            <ScrollView style={styles.viewArchivedBody}>
+              <Text style={styles.viewArchivedTitle}>
+                {selectedArchivedTask.title}
+              </Text>
+
+              {selectedArchivedTask.completed && (
+                <View style={styles.completedBadgeLarge}>
+                  <Text style={styles.completedBadgeText}>✓ Completed</Text>
+                </View>
+              )}
+
+              <Text style={styles.viewArchivedLabel}>Details</Text>
+              <View style={styles.viewArchivedDetails}>
+                {renderFullDetails(selectedArchivedTask.details)}
+              </View>
+
+              <Text style={styles.archivedAtText}>
+                Archived on {new Date(selectedArchivedTask.archivedAt).toLocaleString()}
+              </Text>
+            </ScrollView>
+          )}
+
+          <View style={styles.viewArchivedActions}>
+            <TouchableOpacity
+              style={styles.restoreBtn}
+              onPress={() => restoreTask(selectedArchivedTask?.id)}
+            >
+              <Text style={styles.restoreBtnText}>↩️ Restore</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.permanentDeleteBtn}
+              onPress={() => permanentlyDeleteTask(selectedArchivedTask?.id)}
+            >
+              <Text style={styles.permanentDeleteText}>🗑️ Delete Forever</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <GestureHandlerRootView style={styles.container}>
-      <Text style={styles.title}>My TODO List</Text>
+      {/* Header with title and archive button */}
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>My TODO List</Text>
+        <TouchableOpacity style={styles.archiveBtn} onPress={openArchiveModal}>
+          <Text style={styles.archiveBtnText}>📦</Text>
+          {archivedTasks.length > 0 && (
+            <View style={styles.archiveBadge}>
+              <Text style={styles.archiveBadgeText}>{archivedTasks.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity style={styles.addTaskButton} onPress={openAddModal}>
         <Text style={styles.addTaskButtonText}>+ Add New Task</Text>
@@ -476,6 +688,12 @@ export default function HomeScreen() {
 
       {/* Edit Task Modal */}
       {renderModal(true)}
+
+      {/* Archive Modal */}
+      {renderArchiveModal()}
+
+      {/* View Archived Task Modal */}
+      {renderViewArchivedTaskModal()}
     </GestureHandlerRootView>
   );
 }
@@ -487,12 +705,49 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
   },
+  headerContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+    position: "relative",
+  },
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    marginBottom: 20,
     textAlign: "center",
     color: "#333",
+  },
+  archiveBtn: {
+    position: "absolute",
+    right: 0,
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  archiveBtnText: {
+    fontSize: 22,
+  },
+  archiveBadge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: "#ff4444",
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  archiveBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "bold",
   },
   addTaskButton: {
     backgroundColor: "#007AFF",
@@ -596,14 +851,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 8,
   },
-  statusPending: {
-    fontSize: 9,
-    color: "#007AFF",
-    fontWeight: "600",
-  },
   swipeHint: {
     fontSize: 8,
     color: "#aaa",
+    marginLeft: "auto",
   },
   emptyText: {
     textAlign: "center",
@@ -779,5 +1030,194 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: "#ccc",
+  },
+  // Archive Modal styles
+  archiveModalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    width: width - 40,
+    maxWidth: 400,
+    maxHeight: "80%",
+  },
+  archiveHeader: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 15,
+    position: "relative",
+  },
+  closeBtn: {
+    position: "absolute",
+    right: 0,
+    padding: 5,
+  },
+  closeBtnText: {
+    fontSize: 20,
+    color: "#999",
+  },
+  emptyArchive: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  emptyArchiveIcon: {
+    fontSize: 50,
+    marginBottom: 15,
+  },
+  emptyArchiveText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#666",
+    marginBottom: 5,
+  },
+  emptyArchiveSubtext: {
+    fontSize: 14,
+    color: "#999",
+  },
+  archivedList: {
+    maxHeight: 350,
+  },
+  archivedCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  archivedCardContent: {
+    flex: 1,
+  },
+  archivedTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 4,
+  },
+  archivedDate: {
+    fontSize: 11,
+    color: "#666",
+  },
+  archivedArrow: {
+    fontSize: 24,
+    color: "#999",
+  },
+  clearAllBtn: {
+    marginTop: 15,
+    paddingVertical: 12,
+    backgroundColor: "#ffebee",
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  clearAllText: {
+    color: "#d32f2f",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  // View Archived Task Modal
+  viewArchivedContent: {
+    borderRadius: 20,
+    padding: 20,
+    width: width - 40,
+    maxWidth: 400,
+    maxHeight: "85%",
+  },
+  viewArchivedHeader: {
+    flexDirection: "row",
+    marginBottom: 10,
+  },
+  backBtn: {
+    padding: 5,
+  },
+  backBtnText: {
+    fontSize: 16,
+    color: "#007AFF",
+    fontWeight: "600",
+  },
+  viewArchivedBody: {
+    flex: 1,
+  },
+  viewArchivedTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#222",
+    marginBottom: 15,
+  },
+  completedBadgeLarge: {
+    backgroundColor: "rgba(76, 175, 80, 0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+    marginBottom: 15,
+  },
+  completedBadgeText: {
+    color: "#4CAF50",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  viewArchivedLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#555",
+    marginBottom: 8,
+  },
+  viewArchivedDetails: {
+    backgroundColor: "rgba(255,255,255,0.5)",
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 15,
+  },
+  archivedDetailText: {
+    fontSize: 14,
+    color: "#333",
+    lineHeight: 22,
+  },
+  archivedListContainer: {
+    gap: 5,
+  },
+  noDetailsText: {
+    fontSize: 14,
+    color: "#999",
+    fontStyle: "italic",
+  },
+  archivedAtText: {
+    fontSize: 12,
+    color: "#666",
+    textAlign: "center",
+    marginTop: 10,
+  },
+  viewArchivedActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 15,
+  },
+  restoreBtn: {
+    flex: 1,
+    backgroundColor: "#e3f2fd",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  restoreBtnText: {
+    color: "#1976d2",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  permanentDeleteBtn: {
+    flex: 1,
+    backgroundColor: "#ffebee",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  permanentDeleteText: {
+    color: "#d32f2f",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
