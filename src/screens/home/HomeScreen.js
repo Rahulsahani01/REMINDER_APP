@@ -9,6 +9,7 @@ import {
   Dimensions,
   Modal,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import {
   GestureHandlerRootView,
@@ -23,12 +24,13 @@ import Animated,
   withTiming,
   runOnJS,
 } from "react-native-reanimated";
+import { useTasks } from "../../hooks/useTask";
 
 const { width } = Dimensions.get("window");
 const numColumns = 2;
 const cardMargin = 10;
 const containerPadding = 20;
-const cardGap = 12; // Gap between cards
+const cardGap = 12;
 const cardWidth = (width - containerPadding * 2 - cardGap) / numColumns;
 const cardHeight = 140;
 const SWIPE_THRESHOLD = cardWidth * 0.3;
@@ -52,8 +54,20 @@ const DETAIL_TYPES = [
 ];
 
 export default function HomeScreen() {
-  const [tasks, setTasks] = useState([]);
-  const [archivedTasks, setArchivedTasks] = useState([]);
+  // Use the custom hook for task management with persistence
+  const {
+    tasks,
+    archivedTasks,
+    isLoading,
+    addTask: addTaskToStorage,
+    updateTask: updateTaskInStorage,
+    toggleTask,
+    archiveTask,
+    restoreTask,
+    permanentlyDeleteTask,
+    clearAllArchived,
+  } = useTasks();
+
   const [modalVisible, setModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [archiveModalVisible, setArchiveModalVisible] = useState(false);
@@ -144,16 +158,13 @@ export default function HomeScreen() {
   const addTask = () => {
     if (newTitle.trim()) {
       const details = formatDetails();
-      setTasks([
-        ...tasks,
-        {
-          id: Date.now().toString(),
-          title: newTitle.trim(),
-          details: details,
-          completed: false,
-          color: getRandomLightColor(),
-        },
-      ]);
+      addTaskToStorage({
+        id: Date.now().toString(),
+        title: newTitle.trim(),
+        details: details,
+        completed: false,
+        color: getRandomLightColor(),
+      });
       setNewTitle("");
       setNewDetails("");
       setDetailType("paragraph");
@@ -164,70 +175,28 @@ export default function HomeScreen() {
 
   const updateTask = () => {
     if (newTitle.trim() && editingTask) {
-      setTasks(
-        tasks.map((task) =>
-          task.id === editingTask.id
-            ? {
-                ...task,
-                title: newTitle.trim(),
-                details: formatDetails(),
-              }
-            : task
-        )
-      );
+      updateTaskInStorage(editingTask.id, {
+        title: newTitle.trim(),
+        details: formatDetails(),
+      });
       closeEditModal();
     }
   };
 
   const deleteTaskFromEdit = () => {
     if (editingTask) {
-      const taskToArchive = tasks.find((task) => task.id === editingTask.id);
-      if (taskToArchive) {
-        setArchivedTasks([
-          ...archivedTasks,
-          { ...taskToArchive, archivedAt: new Date().toISOString() },
-        ]);
-      }
-      setTasks(tasks.filter((task) => task.id !== editingTask.id));
+      archiveTask(editingTask.id);
       closeEditModal();
     }
   };
 
-  const toggleTask = (id) => {
-    setTasks(
-      tasks.map((item) =>
-        item.id === id ? { ...item, completed: !item.completed } : item
-      )
-    );
-  };
-
-  const archiveTask = (id) => {
-    const taskToArchive = tasks.find((task) => task.id === id);
-    if (taskToArchive) {
-      setArchivedTasks([
-        ...archivedTasks,
-        { ...taskToArchive, archivedAt: new Date().toISOString() },
-      ]);
-    }
-    setTasks(tasks.filter((item) => item.id !== id));
-  };
-
-  const permanentlyDeleteTask = (id) => {
-    setArchivedTasks(archivedTasks.filter((task) => task.id !== id));
+  const handleRestoreTask = (taskId) => {
+    restoreTask(taskId);
     closeViewArchivedTask();
   };
 
-  const clearAllArchived = () => {
-    setArchivedTasks([]);
-  };
-
-  const restoreTask = (id) => {
-    const taskToRestore = archivedTasks.find((task) => task.id === id);
-    if (taskToRestore) {
-      const { archivedAt, ...restoredTask } = taskToRestore;
-      setTasks([...tasks, restoredTask]);
-      setArchivedTasks(archivedTasks.filter((task) => task.id !== id));
-    }
+  const handlePermanentlyDeleteTask = (taskId) => {
+    permanentlyDeleteTask(taskId);
     closeViewArchivedTask();
   };
 
@@ -640,13 +609,13 @@ export default function HomeScreen() {
           <View style={styles.viewArchivedActions}>
             <TouchableOpacity
               style={styles.restoreBtn}
-              onPress={() => restoreTask(selectedArchivedTask?.id)}
+              onPress={() => handleRestoreTask(selectedArchivedTask?.id)}
             >
               <Text style={styles.restoreBtnText}>↩️ Restore</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.permanentDeleteBtn}
-              onPress={() => permanentlyDeleteTask(selectedArchivedTask?.id)}
+              onPress={() => handlePermanentlyDeleteTask(selectedArchivedTask?.id)}
             >
               <Text style={styles.permanentDeleteText}>🗑️ Delete Forever</Text>
             </TouchableOpacity>
@@ -655,6 +624,16 @@ export default function HomeScreen() {
       </View>
     </Modal>
   );
+
+  // Show loading indicator while loading data
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading tasks...</Text>
+      </View>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -701,6 +680,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
     paddingTop: 60,
     paddingHorizontal: containerPadding,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: "#666",
   },
   headerContainer: {
     flexDirection: "row",
